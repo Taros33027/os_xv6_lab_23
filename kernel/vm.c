@@ -15,7 +15,7 @@ extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
 
-// Make a direct-map page table for the kernel.
+// 为内核创建一个直接映射页表。
 pagetable_t
 kvmmake(void)
 {
@@ -55,7 +55,6 @@ kvminit(void)
 {
   kernel_pagetable = kvmmake();
 }
-
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
 void
@@ -69,7 +68,26 @@ kvminithart()
   // flush stale entries from the TLB.
   sfence_vma();
 }
+void
+_vmprint(pagetable_t pagetable, uint64 deeps) {
 
+  for(int i = 0; i < 512; i++){
+    pte_t pte = pagetable[i];
+    if(pte & PTE_V){
+      // this PTE points to a lower-level page table.
+      uint64 child = PTE2PA(pte);
+      printf("..");
+      for (int j = 0; j < deeps - 1; j++) printf(" ..");
+      printf("%d: pte %p pa %p\n", i, pte, child);
+      if ((pte & (PTE_R|PTE_W|PTE_X)) == 0) _vmprint((pagetable_t)child, deeps + 1);
+    }
+  }
+}
+void
+vmprint(pagetable_t pagetable) {
+  printf("page table %p\n",pagetable);
+  _vmprint(pagetable, 1);
+}
 // Return the address of the PTE in page table pagetable
 // that corresponds to virtual address va.  If alloc!=0,
 // create any required page-table pages.
@@ -128,6 +146,7 @@ walkaddr(pagetable_t pagetable, uint64 va)
 // add a mapping to the kernel page table.
 // only used when booting.
 // does not flush TLB or enable paging.
+
 void
 kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
 {
